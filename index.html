@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>99 Nights in the Snow Arctic</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Loading Screen -->
+        <div id="loading-screen">
+            <div class="loading-content">
+                <h1>99 NIGHTS</h1>
+                <h2>in the Snow Arctic</h2>
+                <div class="snowflakes">❄️ ❄️ ❄️</div>
+                <p>Loading...</p>
+            </div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" style="display: none;">
+            <div class="start-content">
+                <h1>99 NIGHTS</h1>
+                <h2>in the Snow Arctic</h2>
+                <div class="subtitle">Survive the frozen nightmare</div>
+                <button id="start-button">BEGIN SURVIVAL</button>
+                <div class="instructions">
+                    <p>WASD - Move</p>
+                    <p>Mouse - Look around</p>
+                    <p>Click - Attack / Chop trees</p>
+                    <p>E - Open Crafting</p>
+                    <p class="warning-text">Stay near the fire. He comes at night.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game UI -->
+        <div id="game-ui" style="display: none;">
+            <!-- Lobby UI (shown in Christmas lobby) -->
+            <div id="lobby-ui">
+                <div id="lobby-title">
+                    <h1>🎄 CHRISTMAS LODGE 🎄</h1>
+                    <p>Choose your class - Walk into a portal to enter the forest</p>
+                </div>
+                <div id="portal-hints">
+                    <div class="portal-hint warrior">
+                        <span class="hint-icon">⚔️</span>
+                        <span class="hint-name">WARRIOR</span>
+                        <span class="hint-weapon">🗡️ Katana</span>
+                        <span class="hint-desc">+50% damage, +25 HP</span>
+                    </div>
+                    <div class="portal-hint scout">
+                        <span class="hint-icon">🏹</span>
+                        <span class="hint-name">SCOUT</span>
+                        <span class="hint-weapon">🏹 Bow & Arrow</span>
+                        <span class="hint-desc">+40% speed, ranged</span>
+                    </div>
+                    <div class="portal-hint survivor">
+                        <span class="hint-icon">🛡️</span>
+                        <span class="hint-name">SURVIVOR</span>
+                        <span class="hint-weapon">⚔️🛡️ Sword & Shield</span>
+                        <span class="hint-desc">+100% gathering, block</span>
+                    </div>
+                </div>
+                <div id="starting-items">
+                    <p>All classes start with: 🪓 Old Axe + 🎒 Worn Sack</p>
+                </div>
+            </div>
+
+            <!-- Forest UI (shown in game) -->
+            <div id="forest-ui" style="display: none;">
+                <!-- Top HUD -->
+                <div id="top-hud">
+                    <div id="night-counter">
+                        <span class="label">NIGHT</span>
+                        <span id="current-night">1</span>
+                        <span class="of">/</span>
+                        <span class="total">99</span>
+                    </div>
+                    <div id="time-display">
+                        <div id="time-icon">☀️</div>
+                        <div id="time-bar-container">
+                            <div id="time-bar"></div>
+                        </div>
+                    </div>
+                    <div id="class-display">
+                        <span id="current-class"></span>
+                    </div>
+                </div>
+
+                <!-- Resource HUD -->
+                <div id="resource-hud">
+                    <div class="resource" id="health-resource">
+                        <span class="resource-icon">❤️</span>
+                        <span class="resource-count" id="health-count">100</span>
+                        <span class="resource-unit">HP</span>
+                    </div>
+                    <div class="resource" id="wood-resource">
+                        <span class="resource-icon">🪵</span>
+                        <span class="resource-count" id="wood-count">0</span>
+                    </div>
+                    <div class="resource" id="pelts-resource">
+                        <span class="resource-icon">🐺</span>
+                        <span class="resource-count" id="pelts-count">0</span>
+                        <span class="resource-label">Pelts</span>
+                    </div>
+                    <div class="resource" id="thick-pelts-resource">
+                        <span class="resource-icon">🐻‍❄️</span>
+                        <span class="resource-count" id="thick-pelts-count">0</span>
+                        <span class="resource-label">Thick</span>
+                    </div>
+                    <div class="resource" id="tusks-resource">
+                        <span class="resource-icon">🦣</span>
+                        <span class="resource-count" id="tusks-count">0</span>
+                        <span class="resource-label">Tusks</span>
+                    </div>
+                </div>
+
+                <!-- Hotbar (bottom center) -->
+                <div id="hotbar">
+                    <div class="hotbar-slot selected" data-slot="0">
+                        <span class="slot-key">1</span>
+                        <span class="slot-icon">—</span>
+                        <span class="slot-name"></span>
+                    </div>
+                    <div class="hotbar-slot" data-slot="1">
+                        <span class="slot-key">2</span>
+                        <span class="slot-icon">—</span>
+                        <span class="slot-name"></span>
+                    </div>
+                    <div class="hotbar-slot" data-slot="2">
+                        <span class="slot-key">3</span>
+                        <span class="slot-icon">—</span>
+                        <span class="slot-name"></span>
+                    </div>
+                    <div class="hotbar-slot" data-slot="3">
+                        <span class="slot-key">4</span>
+                        <span class="slot-icon">—</span>
+                        <span class="slot-name"></span>
+                    </div>
+                    <div class="hotbar-slot" data-slot="4">
+                        <span class="slot-key">5</span>
+                        <span class="slot-icon">—</span>
+                        <span class="slot-name"></span>
+                    </div>
+                    <div class="hotbar-slot" data-slot="5">
+                        <span class="slot-key">6</span>
+                        <span class="slot-icon">—</span>
+                        <span class="slot-name"></span>
+                    </div>
+                    <div class="hotbar-slot" data-slot="6">
+                        <span class="slot-key">7</span>
+                        <span class="slot-icon">—</span>
+                        <span class="slot-name"></span>
+                    </div>
+                    <div class="hotbar-slot" data-slot="7">
+                        <span class="slot-key">8</span>
+                        <span class="slot-icon">—</span>
+                        <span class="slot-name"></span>
+                    </div>
+                    <div class="hotbar-slot" data-slot="8">
+                        <span class="slot-key">9</span>
+                        <span class="slot-icon">—</span>
+                        <span class="slot-name"></span>
+                    </div>
+                </div>
+                
+                <!-- Selected item info -->
+                <div id="selected-item-info">
+                    <span id="selected-item-name">No item selected</span>
+                </div>
+
+                <!-- Warning message -->
+                <div id="warning" style="display: none;">
+                    <span id="warning-text">HE IS COMING</span>
+                </div>
+
+                <!-- Wind Whisper (Day 5 special event) -->
+                <div id="wind-whisper" style="display: none;">
+                    <div class="whisper-content">
+                        <div class="whisper-text">The wind whispers...</div>
+                        <div class="whisper-message">"They're coming tonight... protect your fire..."</div>
+                    </div>
+                </div>
+
+                <!-- Crafting Menu -->
+                <div id="crafting-menu" style="display: none;">
+                    <div class="crafting-header">
+                        <h2>❄️ CRAFTING BENCH ❄️</h2>
+                        <button id="close-crafting">✕</button>
+                    </div>
+                    
+                    <div class="crafting-section">
+                        <h3>🏗️ Building</h3>
+                        <div class="crafting-items">
+                            <div class="craft-item" data-item="craftingBench">
+                                <div class="craft-icon">🔨</div>
+                                <div class="craft-name">Crafting Bench</div>
+                                <div class="craft-desc">Place anywhere to craft</div>
+                                <div class="craft-cost">🪵 10</div>
+                            </div>
+                            <div class="craft-item" data-item="wall">
+                                <div class="craft-icon">🧱</div>
+                                <div class="craft-name">Snow Wall</div>
+                                <div class="craft-desc">Block enemies</div>
+                                <div class="craft-cost">🪵 5</div>
+                            </div>
+                            <div class="craft-item" data-item="torch">
+                                <div class="craft-icon">🔦</div>
+                                <div class="craft-name">Torch</div>
+                                <div class="craft-desc">Light the darkness</div>
+                                <div class="craft-cost">🪵 3</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="crafting-section">
+                        <h3>🧥 Snow Gear (from creature pelts & tusks)</h3>
+                        <div class="crafting-items">
+                            <div class="craft-item" data-item="wolfCoat">
+                                <div class="craft-icon">🧥</div>
+                                <div class="craft-name">Wolf Coat</div>
+                                <div class="craft-desc">Basic protection</div>
+                                <div class="craft-cost">🐺 4 Pelts</div>
+                            </div>
+                            <div class="craft-item" data-item="bearArmor">
+                                <div class="craft-icon">🛡️</div>
+                                <div class="craft-name">Bear Armor</div>
+                                <div class="craft-desc">50% less damage</div>
+                                <div class="craft-cost">🐻‍❄️ 3 Thick Pelts</div>
+                            </div>
+                            <div class="craft-item" data-item="mammothBoots">
+                                <div class="craft-icon">👢</div>
+                                <div class="craft-name">Mammoth Boots</div>
+                                <div class="craft-desc">+30% speed</div>
+                                <div class="craft-cost">🦣 2 Tusks</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- End forest-ui -->
+
+            <!-- Center crosshair (shown in both lobby and forest) -->
+            <div id="crosshair">+</div>
+
+            <!-- Interaction prompt -->
+            <div id="interaction-prompt" style="display: none;">
+                <span id="prompt-text">Press E to interact</span>
+            </div>
+
+            <!-- Death Screen -->
+            <div id="death-screen" style="display: none;">
+                <div class="death-content">
+                    <h1>YOU DIED</h1>
+                    <p>Survived <span id="nights-survived">0</span> nights</p>
+                    <button id="restart-button">TRY AGAIN</button>
+                </div>
+            </div>
+
+            <!-- Santa Death Screen -->
+            <div id="santa-death-screen" style="display: none;">
+                <div class="death-content santa-death">
+                    <h1>🎅 HE GOT YOU 🎅</h1>
+                    <p class="creepy-text">You've been... gifted.</p>
+                    <p>Survived <span id="santa-nights-survived">0</span> nights</p>
+                    <button id="santa-restart-button">TRY AGAIN</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Canvas -->
+        <canvas id="game-canvas"></canvas>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
