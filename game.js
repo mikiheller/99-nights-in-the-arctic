@@ -1535,6 +1535,13 @@ function createWorld() {
     
     // Create distant mountains
     createMountains();
+    
+    // Create stars and moon for nighttime
+    createStarsAndMoon();
+    
+    // Set initial bright daytime sky
+    scene.background.setHex(0x87CEEB);
+    scene.fog.color.setHex(0x87CEEB);
 }
 
 function createCampfire() {
@@ -1980,6 +1987,31 @@ function createCreature(type) {
             rightTusk.rotation.x = -Math.PI / 4;
             creatureGroup.add(rightTusk);
             
+            // Mammoth legs (thick and sturdy)
+            const mammothLegMaterial = new THREE.MeshStandardMaterial({ color: 0x7a3d10, roughness: 0.9 });
+            const mammothLegGeometry = new THREE.CylinderGeometry(0.4, 0.5, 2, 8);
+            
+            const mammothLegPositions = [
+                [-1, 1, 1.2],   // front left
+                [1, 1, 1.2],    // front right
+                [-1, 1, -1.2],  // back left
+                [1, 1, -1.2]    // back right
+            ];
+            
+            mammothLegPositions.forEach(pos => {
+                const leg = new THREE.Mesh(mammothLegGeometry, mammothLegMaterial);
+                leg.position.set(...pos);
+                creatureGroup.add(leg);
+                
+                // Big flat feet
+                const foot = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.5, 0.6, 0.3, 8),
+                    mammothLegMaterial
+                );
+                foot.position.set(pos[0], 0.15, pos[2]);
+                creatureGroup.add(foot);
+            });
+            
             health = 150;
             speed = 1.5;
             damage = 40;
@@ -2248,81 +2280,628 @@ function showLootText(text) {
 }
 
 // ============================================
-// SNOW GUARDS
+// CULTISTS (Night 5 Raid Enemies)
 // ============================================
-function spawnSnowGuard(type, x, z) {
-    const guardGroup = new THREE.Group();
-    let health, speed, damage;
+function spawnCultist(type, x, z) {
+    const cultistGroup = new THREE.Group();
+    let health, speed, damage, attacksFirePriority;
     
-    // Base snow guard appearance
-    const bodyColor = type === 'leader' ? 0x4a0080 : (type === 'juggernaut' ? 0x2a4a6a : 0x3a5a7a);
-    const scale = type === 'juggernaut' ? 1.5 : (type === 'leader' ? 1.2 : 1);
+    // Helper function to add humanoid legs (Santa-style)
+    function addLegs(group, legColor, bootColor, yOffset) {
+        const legMaterial = new THREE.MeshStandardMaterial({ color: legColor, roughness: 0.7 });
+        const bootMaterial = new THREE.MeshStandardMaterial({ color: bootColor, roughness: 0.8 });
+        
+        [-0.25, 0.25].forEach(xPos => {
+            // Thigh
+            const thigh = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.12, 0.1, 0.6, 8),
+                legMaterial
+            );
+            thigh.position.set(xPos, yOffset + 0.3, 0.1);
+            thigh.rotation.x = 0.4;
+            group.add(thigh);
+            
+            // Shin
+            const shin = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.1, 0.08, 0.5, 8),
+                legMaterial
+            );
+            shin.position.set(xPos, yOffset - 0.15, 0.05);
+            shin.rotation.x = -0.2;
+            group.add(shin);
+            
+            // Boot
+            const boot = new THREE.Mesh(
+                new THREE.BoxGeometry(0.15, 0.12, 0.25),
+                bootMaterial
+            );
+            boot.position.set(xPos, yOffset - 0.4, 0.1);
+            group.add(boot);
+        });
+    }
     
-    // Body
-    const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.5 * scale, 0.6 * scale, 2 * scale, 8),
-        new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.7 })
-    );
-    body.position.y = scale;
-    guardGroup.add(body);
+    // Helper function to add humanoid arms
+    function addArms(group, armColor, yOffset, hasWeaponRight) {
+        const armMaterial = new THREE.MeshStandardMaterial({ color: armColor, roughness: 0.7 });
+        
+        // Left arm
+        const leftUpper = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.08, 0.07, 0.5, 8),
+            armMaterial
+        );
+        leftUpper.position.set(-0.45, yOffset, 0);
+        leftUpper.rotation.z = Math.PI / 3;
+        group.add(leftUpper);
+        
+        const leftLower = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.07, 0.06, 0.4, 8),
+            armMaterial
+        );
+        leftLower.position.set(-0.65, yOffset - 0.3, 0.1);
+        leftLower.rotation.x = -0.5;
+        group.add(leftLower);
+        
+        // Right arm (may hold weapon)
+        if (!hasWeaponRight) {
+            const rightUpper = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08, 0.07, 0.5, 8),
+                armMaterial
+            );
+            rightUpper.position.set(0.45, yOffset, 0);
+            rightUpper.rotation.z = -Math.PI / 3;
+            group.add(rightUpper);
+            
+            const rightLower = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.07, 0.06, 0.4, 8),
+                armMaterial
+            );
+            rightLower.position.set(0.65, yOffset - 0.3, 0.1);
+            rightLower.rotation.x = -0.5;
+            group.add(rightLower);
+        }
+    }
     
-    // Head
-    const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.35 * scale, 8, 8),
-        new THREE.MeshStandardMaterial({ color: 0x87ceeb, roughness: 0.6 })
-    );
-    head.position.y = 2.2 * scale;
-    guardGroup.add(head);
-    
-    // Glowing eyes
-    const eyeMaterial = new THREE.MeshBasicMaterial({ 
-        color: type === 'leader' ? 0xff00ff : 0x00ffff 
-    });
-    const eye1 = new THREE.Mesh(new THREE.SphereGeometry(0.05 * scale), eyeMaterial);
-    eye1.position.set(-0.1 * scale, 2.25 * scale, 0.3 * scale);
-    guardGroup.add(eye1);
-    
-    const eye2 = eye1.clone();
-    eye2.position.set(0.1 * scale, 2.25 * scale, 0.3 * scale);
-    guardGroup.add(eye2);
-    
-    // Ice weapon
-    const weapon = new THREE.Mesh(
-        new THREE.BoxGeometry(0.1, 1.5 * scale, 0.1),
-        new THREE.MeshStandardMaterial({ color: 0x87ceeb, transparent: true, opacity: 0.8 })
-    );
-    weapon.position.set(0.5 * scale, 1.5 * scale, 0);
-    guardGroup.add(weapon);
-    
-    // Stats based on type
     switch (type) {
-        case 'snowGuard':
+        case 'axeCultist':
+            // === AXE CULTIST - Blue coat, humanoid, holding axe ===
+            const axeCoatColor = 0x2244aa; // Blue coat
+            const axeSkinColor = 0xddccbb;
+            
+            // Body (blue coat)
+            const axeBody = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.35, 0.45, 1.4, 8),
+                new THREE.MeshStandardMaterial({ color: axeCoatColor, roughness: 0.7 })
+            );
+            axeBody.position.y = 1.7;
+            cultistGroup.add(axeBody);
+            
+            // Head
+            const axeHead = new THREE.Mesh(
+                new THREE.SphereGeometry(0.25, 12, 12),
+                new THREE.MeshStandardMaterial({ color: axeSkinColor, roughness: 0.6 })
+            );
+            axeHead.position.y = 2.6;
+            cultistGroup.add(axeHead);
+            
+            // Hood
+            const axeHood = new THREE.Mesh(
+                new THREE.SphereGeometry(0.3, 8, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+                new THREE.MeshStandardMaterial({ color: 0x1a3388, roughness: 0.8 })
+            );
+            axeHood.position.y = 2.65;
+            axeHood.rotation.x = 0.3;
+            cultistGroup.add(axeHood);
+            
+            // Glowing red eyes
+            const axeEyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const axeEye1 = new THREE.Mesh(new THREE.SphereGeometry(0.04), axeEyeMat);
+            axeEye1.position.set(-0.08, 2.65, 0.2);
+            cultistGroup.add(axeEye1);
+            const axeEye2 = axeEye1.clone();
+            axeEye2.position.set(0.08, 2.65, 0.2);
+            cultistGroup.add(axeEye2);
+            
+            // Add legs
+            addLegs(cultistGroup, axeCoatColor, 0x222222, 0.9);
+            
+            // Add left arm
+            addArms(cultistGroup, axeCoatColor, 2.2, true);
+            
+            // Right arm holding axe
+            const axeArmUpper = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08, 0.07, 0.5, 8),
+                new THREE.MeshStandardMaterial({ color: axeCoatColor, roughness: 0.7 })
+            );
+            axeArmUpper.position.set(0.45, 2.2, 0);
+            axeArmUpper.rotation.z = -0.8;
+            cultistGroup.add(axeArmUpper);
+            
+            const axeArmLower = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.07, 0.06, 0.4, 8),
+                new THREE.MeshStandardMaterial({ color: axeCoatColor, roughness: 0.7 })
+            );
+            axeArmLower.position.set(0.7, 2.0, 0.2);
+            axeArmLower.rotation.x = -0.8;
+            cultistGroup.add(axeArmLower);
+            
+            // Battle Axe
+            const axeHandle = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.03, 0.03, 1.0, 6),
+                new THREE.MeshStandardMaterial({ color: 0x4a3020 })
+            );
+            axeHandle.position.set(0.85, 2.2, 0.3);
+            axeHandle.rotation.x = -0.5;
+            cultistGroup.add(axeHandle);
+            
+            const axeBlade = new THREE.Mesh(
+                new THREE.BoxGeometry(0.35, 0.4, 0.06),
+                new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9 })
+            );
+            axeBlade.position.set(0.85, 2.65, 0.35);
+            cultistGroup.add(axeBlade);
+            
             health = 40;
             speed = 3;
             damage = 15;
+            attacksFirePriority = 0.3;
             break;
+            
+        case 'bowCultist':
+            // === BOW CULTIST - Red coat with pink stripes and gold sparkles ===
+            const bowCoatColor = 0xcc2222; // Red coat
+            const bowStripeColor = 0xff88aa; // Pink stripes
+            
+            // Body (red coat)
+            const bowBody = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.3, 0.4, 1.3, 8),
+                new THREE.MeshStandardMaterial({ color: bowCoatColor, roughness: 0.6 })
+            );
+            bowBody.position.y = 1.65;
+            cultistGroup.add(bowBody);
+            
+            // Pink stripes on coat
+            for (let i = 0; i < 3; i++) {
+                const stripe = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.5, 0.06, 0.5),
+                    new THREE.MeshStandardMaterial({ color: bowStripeColor, roughness: 0.5 })
+                );
+                stripe.position.y = 1.3 + i * 0.35;
+                cultistGroup.add(stripe);
+            }
+            
+            // Gold sparkles (small gold spheres)
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 });
+            for (let i = 0; i < 8; i++) {
+                const sparkle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.03, 6, 6),
+                    goldMat
+                );
+                const angle = Math.random() * Math.PI * 2;
+                const height = 1.2 + Math.random() * 0.9;
+                sparkle.position.set(
+                    Math.cos(angle) * 0.35,
+                    height,
+                    Math.sin(angle) * 0.35
+                );
+                cultistGroup.add(sparkle);
+            }
+            
+            // Head
+            const bowHead = new THREE.Mesh(
+                new THREE.SphereGeometry(0.22, 12, 12),
+                new THREE.MeshStandardMaterial({ color: 0xddccbb, roughness: 0.6 })
+            );
+            bowHead.position.y = 2.5;
+            cultistGroup.add(bowHead);
+            
+            // Hood (red with pink trim)
+            const bowHood = new THREE.Mesh(
+                new THREE.ConeGeometry(0.28, 0.4, 8),
+                new THREE.MeshStandardMaterial({ color: bowCoatColor, roughness: 0.7 })
+            );
+            bowHood.position.y = 2.75;
+            cultistGroup.add(bowHood);
+            
+            // Glowing green eyes
+            const bowEyeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            const bowEye1 = new THREE.Mesh(new THREE.SphereGeometry(0.035), bowEyeMat);
+            bowEye1.position.set(-0.07, 2.55, 0.18);
+            cultistGroup.add(bowEye1);
+            const bowEye2 = bowEye1.clone();
+            bowEye2.position.set(0.07, 2.55, 0.18);
+            cultistGroup.add(bowEye2);
+            
+            // Add legs
+            addLegs(cultistGroup, bowCoatColor, 0x331111, 0.85);
+            
+            // Add arms
+            addArms(cultistGroup, bowCoatColor, 2.1, true);
+            
+            // Right arm with bow
+            const bowArmUpper = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.07, 0.06, 0.45, 8),
+                new THREE.MeshStandardMaterial({ color: bowCoatColor, roughness: 0.7 })
+            );
+            bowArmUpper.position.set(0.4, 2.1, 0.1);
+            bowArmUpper.rotation.z = -Math.PI / 2.5;
+            cultistGroup.add(bowArmUpper);
+            
+            // Bow
+            const bowCurve = new THREE.Mesh(
+                new THREE.TorusGeometry(0.35, 0.025, 8, 16, Math.PI),
+                new THREE.MeshStandardMaterial({ color: 0x5a4030 })
+            );
+            bowCurve.position.set(0.7, 2.0, 0.25);
+            bowCurve.rotation.y = Math.PI / 2;
+            bowCurve.rotation.z = Math.PI / 2;
+            cultistGroup.add(bowCurve);
+            
+            // Quiver on back
+            const quiver = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08, 0.08, 0.5, 8),
+                new THREE.MeshStandardMaterial({ color: 0x442211 })
+            );
+            quiver.position.set(0, 1.8, -0.25);
+            quiver.rotation.x = 0.2;
+            cultistGroup.add(quiver);
+            
+            health = 25;
+            speed = 2.5;
+            damage = 12;
+            attacksFirePriority = 0.5;
+            break;
+            
         case 'juggernaut':
-            health = 100;
-            speed = 1.5;
-            damage = 30;
+            // === JUGGERNAUT - Full armor, helmet with horns ===
+            const armorColor = 0x3a3a4a;
+            const armorMat = new THREE.MeshStandardMaterial({ color: armorColor, roughness: 0.4, metalness: 0.7 });
+            
+            // Massive armored body
+            const jugBody = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.6, 0.7, 2.0, 8),
+                armorMat
+            );
+            jugBody.position.y = 2.0;
+            cultistGroup.add(jugBody);
+            
+            // Chest plate
+            const chestPlate = new THREE.Mesh(
+                new THREE.BoxGeometry(0.9, 1.0, 0.4),
+                new THREE.MeshStandardMaterial({ color: 0x4a4a5a, metalness: 0.8, roughness: 0.3 })
+            );
+            chestPlate.position.set(0, 2.2, 0.25);
+            cultistGroup.add(chestPlate);
+            
+            // Massive armored shoulders with spikes
+            const shoulderMat = new THREE.MeshStandardMaterial({ color: 0x4a4a5a, metalness: 0.7 });
+            [-0.7, 0.7].forEach(xPos => {
+                const shoulder = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.35, 8, 8),
+                    shoulderMat
+                );
+                shoulder.position.set(xPos, 2.7, 0);
+                shoulder.scale.set(1.2, 0.8, 1);
+                cultistGroup.add(shoulder);
+                
+                // Shoulder spike
+                const shoulderSpike = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.1, 0.4, 6),
+                    shoulderMat
+                );
+                shoulderSpike.position.set(xPos * 1.1, 2.9, 0);
+                shoulderSpike.rotation.z = xPos > 0 ? -0.5 : 0.5;
+                cultistGroup.add(shoulderSpike);
+            });
+            
+            // Giant helmet
+            const jugHelmet = new THREE.Mesh(
+                new THREE.SphereGeometry(0.45, 8, 8),
+                new THREE.MeshStandardMaterial({ color: 0x2a2a3a, metalness: 0.8 })
+            );
+            jugHelmet.position.y = 3.4;
+            jugHelmet.scale.set(1, 1.1, 1);
+            cultistGroup.add(jugHelmet);
+            
+            // Helmet face plate
+            const facePlate = new THREE.Mesh(
+                new THREE.BoxGeometry(0.5, 0.4, 0.15),
+                new THREE.MeshStandardMaterial({ color: 0x222233, metalness: 0.9 })
+            );
+            facePlate.position.set(0, 3.35, 0.35);
+            cultistGroup.add(facePlate);
+            
+            // Glowing visor slit
+            const visor = new THREE.Mesh(
+                new THREE.BoxGeometry(0.35, 0.06, 0.1),
+                new THREE.MeshBasicMaterial({ color: 0xff4400 })
+            );
+            visor.position.set(0, 3.4, 0.42);
+            cultistGroup.add(visor);
+            
+            // HORNS on helmet!
+            const hornMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.6 });
+            [-0.3, 0.3].forEach(xPos => {
+                const horn = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.1, 0.6, 8),
+                    hornMat
+                );
+                horn.position.set(xPos, 3.7, -0.1);
+                horn.rotation.x = -0.5;
+                horn.rotation.z = xPos > 0 ? -0.4 : 0.4;
+                cultistGroup.add(horn);
+            });
+            
+            // Armored legs
+            const legArmorMat = new THREE.MeshStandardMaterial({ color: armorColor, metalness: 0.6, roughness: 0.4 });
+            [-0.3, 0.3].forEach(xPos => {
+                const thigh = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.18, 0.15, 0.7, 8),
+                    legArmorMat
+                );
+                thigh.position.set(xPos, 0.9, 0.05);
+                thigh.rotation.x = 0.2;
+                cultistGroup.add(thigh);
+                
+                const shin = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.15, 0.12, 0.6, 8),
+                    legArmorMat
+                );
+                shin.position.set(xPos, 0.35, 0);
+                cultistGroup.add(shin);
+                
+                const boot = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, 0.15, 0.3),
+                    new THREE.MeshStandardMaterial({ color: 0x1a1a2a, metalness: 0.5 })
+                );
+                boot.position.set(xPos, 0.08, 0.05);
+                cultistGroup.add(boot);
+            });
+            
+            // Massive armored arms
+            [-1, 1].forEach(side => {
+                const upperArm = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.15, 0.12, 0.6, 8),
+                    legArmorMat
+                );
+                upperArm.position.set(side * 0.75, 2.3, 0);
+                upperArm.rotation.z = side * 0.6;
+                cultistGroup.add(upperArm);
+                
+                const lowerArm = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.12, 0.1, 0.5, 8),
+                    legArmorMat
+                );
+                lowerArm.position.set(side * 0.95, 1.9, 0.15);
+                lowerArm.rotation.x = -0.4;
+                cultistGroup.add(lowerArm);
+                
+                // Armored fist
+                const fist = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.12, 8, 8),
+                    legArmorMat
+                );
+                fist.position.set(side * 1.0, 1.6, 0.25);
+                cultistGroup.add(fist);
+            });
+            
+            // Giant war hammer
+            const hammerHandle = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.05, 0.05, 1.6, 6),
+                new THREE.MeshStandardMaterial({ color: 0x3a2a1a })
+            );
+            hammerHandle.position.set(1.1, 2.0, 0.3);
+            hammerHandle.rotation.x = -0.3;
+            hammerHandle.rotation.z = -0.2;
+            cultistGroup.add(hammerHandle);
+            
+            const hammerHead = new THREE.Mesh(
+                new THREE.BoxGeometry(0.5, 0.4, 0.4),
+                new THREE.MeshStandardMaterial({ color: 0x555566, metalness: 0.9 })
+            );
+            hammerHead.position.set(1.2, 2.7, 0.35);
+            cultistGroup.add(hammerHead);
+            
+            health = 150;
+            speed = 1.0;
+            damage = 40;
+            attacksFirePriority = 0.7;
             break;
-        case 'leader':
-            health = 60;
-            speed = 4;
-            damage = 20;
+            
+        case 'snowKing':
+            // === SNOW KING - Very buff, ginormous armor, giant battle axe, huge helmet, angry eyes ===
+            const kingArmorMat = new THREE.MeshStandardMaterial({ color: 0x2a2a5a, roughness: 0.3, metalness: 0.8 });
+            const kingGoldMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.2 });
+            
+            // MASSIVE buff body
+            const kingBody = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.8, 0.9, 2.5, 8),
+                kingArmorMat
+            );
+            kingBody.position.y = 2.25;
+            cultistGroup.add(kingBody);
+            
+            // Ginormous chest armor
+            const kingChest = new THREE.Mesh(
+                new THREE.BoxGeometry(1.3, 1.4, 0.6),
+                new THREE.MeshStandardMaterial({ color: 0x3a3a6a, metalness: 0.85, roughness: 0.25 })
+            );
+            kingChest.position.set(0, 2.5, 0.2);
+            cultistGroup.add(kingChest);
+            
+            // Gold trim on chest
+            const goldTrim = new THREE.Mesh(
+                new THREE.BoxGeometry(1.35, 0.1, 0.65),
+                kingGoldMat
+            );
+            goldTrim.position.set(0, 3.15, 0.2);
+            cultistGroup.add(goldTrim);
+            
+            // GINORMOUS shoulder armor
+            [-0.85, 0.85].forEach(xPos => {
+                const shoulder = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.45, 8, 8),
+                    kingArmorMat
+                );
+                shoulder.position.set(xPos, 3.2, 0);
+                shoulder.scale.set(1.3, 1, 1.2);
+                cultistGroup.add(shoulder);
+                
+                // Multiple spikes on shoulders
+                for (let s = 0; s < 3; s++) {
+                    const spike = new THREE.Mesh(
+                        new THREE.ConeGeometry(0.08, 0.5, 6),
+                        kingArmorMat
+                    );
+                    spike.position.set(xPos * 1.2, 3.4 + s * 0.15, -0.2 + s * 0.15);
+                    spike.rotation.z = xPos > 0 ? -0.6 : 0.6;
+                    spike.rotation.x = -0.3;
+                    cultistGroup.add(spike);
+                }
+            });
+            
+            // HUGE helmet
+            const kingHelmet = new THREE.Mesh(
+                new THREE.SphereGeometry(0.55, 10, 10),
+                new THREE.MeshStandardMaterial({ color: 0x1a1a3a, metalness: 0.9 })
+            );
+            kingHelmet.position.y = 4.1;
+            kingHelmet.scale.set(1, 1.2, 1);
+            cultistGroup.add(kingHelmet);
+            
+            // Helmet crown/crest
+            const helmetCrest = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 0.6, 0.8),
+                kingGoldMat
+            );
+            helmetCrest.position.set(0, 4.5, -0.1);
+            cultistGroup.add(helmetCrest);
+            
+            // Helmet face guard
+            const faceGuard = new THREE.Mesh(
+                new THREE.BoxGeometry(0.6, 0.5, 0.2),
+                new THREE.MeshStandardMaterial({ color: 0x0a0a2a, metalness: 0.95 })
+            );
+            faceGuard.position.set(0, 4.0, 0.45);
+            cultistGroup.add(faceGuard);
+            
+            // ANGRY glowing eyes (larger, more intense)
+            const angryEyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const kingEye1 = new THREE.Mesh(new THREE.SphereGeometry(0.08), angryEyeMat);
+            kingEye1.position.set(-0.15, 4.05, 0.52);
+            cultistGroup.add(kingEye1);
+            const kingEye2 = kingEye1.clone();
+            kingEye2.position.set(0.15, 4.05, 0.52);
+            cultistGroup.add(kingEye2);
+            
+            // Angry eye glow
+            const eyeGlow = new THREE.PointLight(0xff0000, 0.5, 3);
+            eyeGlow.position.set(0, 4.05, 0.6);
+            cultistGroup.add(eyeGlow);
+            
+            // Massive buff arms
+            [-1, 1].forEach(side => {
+                const upperArm = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.2, 0.18, 0.8, 8),
+                    kingArmorMat
+                );
+                upperArm.position.set(side * 0.9, 2.8, 0);
+                upperArm.rotation.z = side * 0.5;
+                cultistGroup.add(upperArm);
+                
+                const lowerArm = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.18, 0.15, 0.7, 8),
+                    kingArmorMat
+                );
+                lowerArm.position.set(side * 1.15, 2.3, 0.2);
+                lowerArm.rotation.x = -0.5;
+                cultistGroup.add(lowerArm);
+                
+                // Armored gauntlet
+                const gauntlet = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, 0.25, 0.25),
+                    kingArmorMat
+                );
+                gauntlet.position.set(side * 1.2, 1.9, 0.35);
+                cultistGroup.add(gauntlet);
+            });
+            
+            // Massive buff legs
+            [-0.35, 0.35].forEach(xPos => {
+                const thigh = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.22, 0.18, 0.9, 8),
+                    kingArmorMat
+                );
+                thigh.position.set(xPos, 0.95, 0.05);
+                thigh.rotation.x = 0.15;
+                cultistGroup.add(thigh);
+                
+                const shin = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.18, 0.15, 0.7, 8),
+                    kingArmorMat
+                );
+                shin.position.set(xPos, 0.35, 0);
+                cultistGroup.add(shin);
+                
+                const boot = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.25, 0.2, 0.35),
+                    new THREE.MeshStandardMaterial({ color: 0x1a1a3a, metalness: 0.7 })
+                );
+                boot.position.set(xPos, 0.1, 0.05);
+                cultistGroup.add(boot);
+            });
+            
+            // GIANT BATTLE AXE
+            const giantAxeHandle = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.06, 0.06, 2.2, 8),
+                new THREE.MeshStandardMaterial({ color: 0x3a2010 })
+            );
+            giantAxeHandle.position.set(1.3, 2.5, 0.4);
+            giantAxeHandle.rotation.x = -0.2;
+            giantAxeHandle.rotation.z = -0.15;
+            cultistGroup.add(giantAxeHandle);
+            
+            // Double-sided axe blade
+            const axeBladeMain = new THREE.Mesh(
+                new THREE.BoxGeometry(0.6, 0.8, 0.1),
+                new THREE.MeshStandardMaterial({ color: 0x666677, metalness: 0.95, roughness: 0.1 })
+            );
+            axeBladeMain.position.set(1.35, 3.5, 0.5);
+            cultistGroup.add(axeBladeMain);
+            
+            // Other side of axe
+            const axeBladeBack = new THREE.Mesh(
+                new THREE.BoxGeometry(0.5, 0.6, 0.1),
+                new THREE.MeshStandardMaterial({ color: 0x666677, metalness: 0.95, roughness: 0.1 })
+            );
+            axeBladeBack.position.set(1.35, 3.5, 0.3);
+            cultistGroup.add(axeBladeBack);
+            
+            // Gold decoration on axe
+            const axeGold = new THREE.Mesh(
+                new THREE.TorusGeometry(0.15, 0.03, 8, 16),
+                kingGoldMat
+            );
+            axeGold.position.set(1.35, 3.5, 0.4);
+            cultistGroup.add(axeGold);
+            
+            health = 200;
+            speed = 1.5;
+            damage = 50;
+            attacksFirePriority = 0.9;
             break;
     }
     
-    guardGroup.position.set(x, 0, z);
-    scene.add(guardGroup);
+    cultistGroup.position.set(x, 0, z);
+    scene.add(cultistGroup);
     
     gameState.snowGuards.push({
-        mesh: guardGroup,
+        mesh: cultistGroup,
         type: type,
         health: health,
         maxHealth: health,
         speed: speed,
         damage: damage,
+        attacksFirePriority: attacksFirePriority || 0.3,
         x: x,
         z: z,
         attackCooldown: 0
@@ -2332,38 +2911,95 @@ function spawnSnowGuard(type, x, z) {
 function updateSnowGuards(deltaTime) {
     gameState.snowGuards.forEach((guard, index) => {
         if (guard.health <= 0) return;
+
+        // Campfire is at origin (0, 0)
+        const campfireX = 0;
+        const campfireZ = 0;
         
-        // Move toward player
-        const dirX = camera.position.x - guard.mesh.position.x;
-        const dirZ = camera.position.z - guard.mesh.position.z;
-        const dist = Math.sqrt(dirX * dirX + dirZ * dirZ);
+        // Distance to player
+        const dirToPlayerX = camera.position.x - guard.mesh.position.x;
+        const dirToPlayerZ = camera.position.z - guard.mesh.position.z;
+        const distToPlayer = Math.sqrt(dirToPlayerX * dirToPlayerX + dirToPlayerZ * dirToPlayerZ);
         
-        if (dist > 2) {
-            guard.mesh.position.x += (dirX / dist) * guard.speed * deltaTime;
-            guard.mesh.position.z += (dirZ / dist) * guard.speed * deltaTime;
+        // Distance to campfire
+        const dirToFireX = campfireX - guard.mesh.position.x;
+        const dirToFireZ = campfireZ - guard.mesh.position.z;
+        const distToFire = Math.sqrt(dirToFireX * dirToFireX + dirToFireZ * dirToFireZ);
+        
+        // Decide target based on attacksFirePriority (during raids)
+        let targetX, targetZ, targetDist;
+        const attackingFire = gameState.raidActive && Math.random() < (guard.attacksFirePriority || 0.3);
+        
+        if (attackingFire && distToFire > 2) {
+            // Target the campfire
+            targetX = dirToFireX;
+            targetZ = dirToFireZ;
+            targetDist = distToFire;
+        } else {
+            // Target the player
+            targetX = dirToPlayerX;
+            targetZ = dirToPlayerZ;
+            targetDist = distToPlayer;
         }
-        
-        guard.mesh.lookAt(camera.position.x, guard.mesh.position.y, camera.position.z);
-        
-        // Attack if close
-        if (dist < 2.5 && guard.attackCooldown <= 0) {
+
+        // Move toward target
+        if (targetDist > 2) {
+            guard.mesh.position.x += (targetX / targetDist) * guard.speed * deltaTime;
+            guard.mesh.position.z += (targetZ / targetDist) * guard.speed * deltaTime;
+        }
+
+        // Look at current target
+        if (attackingFire && distToFire <= 3) {
+            guard.mesh.lookAt(campfireX, guard.mesh.position.y, campfireZ);
+        } else {
+            guard.mesh.lookAt(camera.position.x, guard.mesh.position.y, camera.position.z);
+        }
+
+        // Attack campfire if close (during raid)
+        if (gameState.raidActive && distToFire < 3 && guard.attackCooldown <= 0) {
+            // Attack the campfire!
+            gameState.campfireStrength -= guard.damage * 0.5;
+            guard.attackCooldown = 2;
+            
+            // Visual feedback - flash the campfire
+            if (campfire) {
+                campfire.traverse(child => {
+                    if (child.isMesh && child.material) {
+                        const origColor = child.material.color ? child.material.color.getHex() : 0;
+                        if (child.material.color) {
+                            child.material.color.setHex(0xff0000);
+                            setTimeout(() => child.material.color.setHex(origColor), 100);
+                        }
+                    }
+                });
+            }
+            
+            // Check if campfire is destroyed
+            if (gameState.campfireStrength <= 0) {
+                gameState.campfireStrength = 0;
+                showCampfireDestroyedGameOver();
+                return;
+            }
+        }
+        // Attack player if close
+        else if (distToPlayer < 2.5 && guard.attackCooldown <= 0) {
             // Check for block (Survivor with Shield - must have shield selected)
             const selectedItem = gameState.hotbar[gameState.selectedSlot];
             if (selectedItem && selectedItem.blockChance && Math.random() < selectedItem.blockChance) {
                 showBlockedText();
                 guard.attackCooldown = 2;
             } else {
-            const actualDamage = gameState.gear.bearArmor ? guard.damage * 0.5 : guard.damage;
-            gameState.playerHealth -= actualDamage;
-            guard.attackCooldown = 2;
-            showDamageFlash();
+                const actualDamage = gameState.gear.bearArmor ? guard.damage * 0.5 : guard.damage;
+                gameState.playerHealth -= actualDamage;
+                guard.attackCooldown = 2;
+                showDamageFlash();
             }
         }
-        
+
         if (guard.attackCooldown > 0) {
             guard.attackCooldown -= deltaTime;
         }
-        
+
         guard.x = guard.mesh.position.x;
         guard.z = guard.mesh.position.z;
     });
@@ -2445,40 +3081,50 @@ function showWindWhisper() {
     }, 5000);
 }
 
-function triggerSnowGuardRaid() {
+function triggerCultistRaid() {
     gameState.raidActive = true;
     
-    // Spawn snow guards around the player
-    const angles = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
-    const distance = 30;
+    // Spawn cultists around the CAMPFIRE (they want to destroy it!)
+    const campfireX = 0; // Campfire is at origin
+    const campfireZ = 0;
+    const distance = 35;
     
-    // Spawn regular snow guards
-    angles.forEach(angle => {
-        const x = camera.position.x + Math.cos(angle) * distance;
-        const z = camera.position.z + Math.sin(angle) * distance;
-        spawnSnowGuard('snowGuard', x, z);
-    });
+    // Spawn 4 Axe Cultists
+    for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2 + Math.random() * 0.5;
+        const x = campfireX + Math.cos(angle) * distance;
+        const z = campfireZ + Math.sin(angle) * distance;
+        spawnCultist('axeCultist', x, z);
+    }
     
-    // Spawn a juggernaut
-    spawnSnowGuard('juggernaut', 
-        camera.position.x + Math.cos(Math.PI / 4) * (distance + 10),
-        camera.position.z + Math.sin(Math.PI / 4) * (distance + 10)
+    // Spawn 2 Bow Cultists (further back)
+    for (let i = 0; i < 2; i++) {
+        const angle = (i / 2) * Math.PI + Math.PI / 4;
+        const x = campfireX + Math.cos(angle) * (distance + 10);
+        const z = campfireZ + Math.sin(angle) * (distance + 10);
+        spawnCultist('bowCultist', x, z);
+    }
+    
+    // Spawn a Juggernaut
+    spawnCultist('juggernaut',
+        campfireX + Math.cos(Math.PI / 3) * (distance + 5),
+        campfireZ + Math.sin(Math.PI / 3) * (distance + 5)
     );
     
-    // Spawn leader
-    spawnSnowGuard('leader',
-        camera.position.x + Math.cos(Math.PI * 3/4) * (distance + 5),
-        camera.position.z + Math.sin(Math.PI * 3/4) * (distance + 5)
+    // Spawn the Snow King!
+    spawnCultist('snowKing',
+        campfireX + Math.cos(Math.PI * 5/4) * (distance + 8),
+        campfireZ + Math.sin(Math.PI * 5/4) * (distance + 8)
     );
-    
+
     // Show raid warning
     const warning = document.getElementById('warning');
-    document.getElementById('warning-text').textContent = 'SNOW GUARD RAID!';
+    document.getElementById('warning-text').textContent = '🔥 CULTIST RAID! PROTECT YOUR FIRE! 🔥';
     warning.style.display = 'block';
     setTimeout(() => {
         warning.style.display = 'none';
         document.getElementById('warning-text').textContent = 'HE IS COMING';
-    }, 3000);
+    }, 4000);
 }
 
 function createSnowParticles() {
@@ -2504,6 +3150,61 @@ function createSnowParticles() {
     const snow = new THREE.Points(geometry, material);
     snow.name = 'snowParticles';
     scene.add(snow);
+}
+
+function createStarsAndMoon() {
+    // Create stars - many small white dots in the sky
+    const starCount = 500;
+    const starGeometry = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(starCount * 3);
+    
+    for (let i = 0; i < starCount * 3; i += 3) {
+        // Position stars in a large dome above the scene
+        const radius = 150 + Math.random() * 50;
+        const theta = Math.random() * Math.PI * 2; // Horizontal angle
+        const phi = Math.random() * Math.PI * 0.4; // Vertical angle (upper dome only)
+        
+        starPositions[i] = radius * Math.sin(phi) * Math.cos(theta);     // x
+        starPositions[i + 1] = radius * Math.cos(phi) + 20;              // y (offset up)
+        starPositions[i + 2] = radius * Math.sin(phi) * Math.sin(theta); // z
+    }
+    
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    
+    const starMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.8,
+        transparent: true,
+        opacity: 0.9
+    });
+    
+    const stars = new THREE.Points(starGeometry, starMaterial);
+    stars.name = 'stars';
+    stars.visible = false; // Hidden during day
+    scene.add(stars);
+    gameState.stars = stars;
+    
+    // Create moon - giant gray ball
+    const moonGeometry = new THREE.SphereGeometry(12, 32, 32);
+    const moonMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0xcccccc
+    });
+    const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+    moon.position.set(80, 100, -50); // High in the sky
+    moon.name = 'moon';
+    moon.visible = false; // Hidden during day
+    scene.add(moon);
+    gameState.moon = moon;
+    
+    // Add a subtle glow around the moon
+    const moonGlowGeometry = new THREE.SphereGeometry(14, 32, 32);
+    const moonGlowMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffee,
+        transparent: true,
+        opacity: 0.2
+    });
+    const moonGlow = new THREE.Mesh(moonGlowGeometry, moonGlowMaterial);
+    moon.add(moonGlow);
 }
 
 function createMountains() {
@@ -2547,17 +3248,19 @@ function createMountains() {
 }
 
 function setupLighting() {
-    // Ambient light (dim)
-    const ambientLight = new THREE.AmbientLight(0x404060, 0.3);
+    // Ambient light - brighter for daytime feel
+    const ambientLight = new THREE.AmbientLight(0x87CEEB, 0.6);
     scene.add(ambientLight);
+    gameState.ambientLight = ambientLight;
     
-    // Directional light (moon/sun)
-    const directionalLight = new THREE.DirectionalLight(0x87ceeb, 0.5);
+    // Directional light (sun)
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(50, 100, 50);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
     scene.add(directionalLight);
+    gameState.directionalLight = directionalLight;
 }
 
 function createSanta() {
@@ -2570,7 +3273,7 @@ function createSanta() {
         roughness: 0.7 
     });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 1.5;
+    body.position.y = 2.5;
     santaGroup.add(body);
     
     // Head
@@ -2580,7 +3283,7 @@ function createSanta() {
         roughness: 0.6 
     });
     const head = new THREE.Mesh(headGeometry, headMaterial);
-    head.position.y = 3;
+    head.position.y = 4;
     santaGroup.add(head);
     
     // Glowing red eyes
@@ -2590,11 +3293,11 @@ function createSanta() {
     });
     
     const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    leftEye.position.set(-0.15, 3, 0.4);
+    leftEye.position.set(-0.15, 4, 0.4);
     santaGroup.add(leftEye);
     
     const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    rightEye.position.set(0.15, 3, 0.4);
+    rightEye.position.set(0.15, 4, 0.4);
     santaGroup.add(rightEye);
     
     // Evil Santa hat
@@ -2604,13 +3307,189 @@ function createSanta() {
         roughness: 0.7 
     });
     const hat = new THREE.Mesh(hatGeometry, hatMaterial);
-    hat.position.y = 3.7;
+    hat.position.y = 4.7;
     hat.rotation.z = 0.2; // Slightly tilted
     santaGroup.add(hat);
     
+    // === BENT LEGS ===
+    const legMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
+    const bootMaterial = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+    
+    // Left leg - bent at knee
+    const leftLegGroup = new THREE.Group();
+    // Thigh (angled forward)
+    const leftThigh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.15, 0.9, 8),
+        legMaterial
+    );
+    leftThigh.position.set(0, 0.45, 0.2);
+    leftThigh.rotation.x = 0.6; // Bent forward
+    leftLegGroup.add(leftThigh);
+    // Knee joint
+    const leftKnee = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 8, 8),
+        legMaterial
+    );
+    leftKnee.position.set(0, 0.15, 0.55);
+    leftLegGroup.add(leftKnee);
+    // Shin (angled down)
+    const leftShin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.12, 0.8, 8),
+        legMaterial
+    );
+    leftShin.position.set(0, -0.25, 0.4);
+    leftShin.rotation.x = -0.4; // Bent back down
+    leftLegGroup.add(leftShin);
+    // Boot
+    const leftBoot = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.2, 0.4),
+        bootMaterial
+    );
+    leftBoot.position.set(0, -0.55, 0.25);
+    leftLegGroup.add(leftBoot);
+    leftLegGroup.position.set(-0.35, 1.0, 0);
+    santaGroup.add(leftLegGroup);
+    
+    // Right leg - bent at knee (mirrored)
+    const rightLegGroup = new THREE.Group();
+    const rightThigh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.15, 0.9, 8),
+        legMaterial
+    );
+    rightThigh.position.set(0, 0.45, 0.2);
+    rightThigh.rotation.x = 0.6;
+    rightLegGroup.add(rightThigh);
+    const rightKnee = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 8, 8),
+        legMaterial
+    );
+    rightKnee.position.set(0, 0.15, 0.55);
+    rightLegGroup.add(rightKnee);
+    const rightShin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.12, 0.8, 8),
+        legMaterial
+    );
+    rightShin.position.set(0, -0.25, 0.4);
+    rightShin.rotation.x = -0.4;
+    rightLegGroup.add(rightShin);
+    const rightBoot = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.2, 0.4),
+        bootMaterial
+    );
+    rightBoot.position.set(0, -0.55, 0.25);
+    rightLegGroup.add(rightBoot);
+    rightLegGroup.position.set(0.35, 1.0, 0);
+    santaGroup.add(rightLegGroup);
+    
+    // === BENT ARMS WITH WHITE GLOVES AND CLAWS ===
+    const armMaterial = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.7 });
+    const gloveMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }); // White gloves
+    const clawMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+    
+    // Left arm - bent at elbow
+    const leftArmGroup = new THREE.Group();
+    // Upper arm
+    const leftUpperArm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.12, 0.7, 8),
+        armMaterial
+    );
+    leftUpperArm.position.set(-0.35, 0, 0);
+    leftUpperArm.rotation.z = Math.PI / 2 + 0.3;
+    leftArmGroup.add(leftUpperArm);
+    // Elbow joint
+    const leftElbow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 8, 8),
+        armMaterial
+    );
+    leftElbow.position.set(-0.65, -0.15, 0);
+    leftArmGroup.add(leftElbow);
+    // Forearm (bent down and forward)
+    const leftForearm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.11, 0.09, 0.6, 8),
+        armMaterial
+    );
+    leftForearm.position.set(-0.75, -0.45, 0.2);
+    leftForearm.rotation.x = -0.8;
+    leftForearm.rotation.z = 0.3;
+    leftArmGroup.add(leftForearm);
+    // White glove (hand)
+    const leftGlove = new THREE.Mesh(
+        new THREE.SphereGeometry(0.14, 8, 8),
+        gloveMaterial
+    );
+    leftGlove.position.set(-0.8, -0.7, 0.45);
+    leftArmGroup.add(leftGlove);
+    // Razor sharp claws extending from glove (5 long deadly claws)
+    for (let i = 0; i < 5; i++) {
+        const claw = new THREE.Mesh(
+            new THREE.ConeGeometry(0.02, 0.6, 8),  // Thinner and longer = sharper!
+            clawMaterial
+        );
+        const angle = (i - 2) * 0.35;
+        claw.position.set(
+            -0.8 + Math.sin(angle) * 0.1,
+            -0.85,
+            0.5 + Math.cos(angle) * 0.1
+        );
+        claw.rotation.x = -0.6;
+        claw.rotation.z = angle * 0.5;
+        leftArmGroup.add(claw);
+    }
+    leftArmGroup.position.set(-0.8, 3.2, 0);
+    santaGroup.add(leftArmGroup);
+    
+    // Right arm - bent at elbow (mirrored)
+    const rightArmGroup = new THREE.Group();
+    const rightUpperArm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.12, 0.7, 8),
+        armMaterial
+    );
+    rightUpperArm.position.set(0.35, 0, 0);
+    rightUpperArm.rotation.z = -(Math.PI / 2 + 0.3);
+    rightArmGroup.add(rightUpperArm);
+    const rightElbow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 8, 8),
+        armMaterial
+    );
+    rightElbow.position.set(0.65, -0.15, 0);
+    rightArmGroup.add(rightElbow);
+    const rightForearm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.11, 0.09, 0.6, 8),
+        armMaterial
+    );
+    rightForearm.position.set(0.75, -0.45, 0.2);
+    rightForearm.rotation.x = -0.8;
+    rightForearm.rotation.z = -0.3;
+    rightArmGroup.add(rightForearm);
+    // White glove (hand)
+    const rightGlove = new THREE.Mesh(
+        new THREE.SphereGeometry(0.14, 8, 8),
+        gloveMaterial
+    );
+    rightGlove.position.set(0.8, -0.7, 0.45);
+    rightArmGroup.add(rightGlove);
+    // Razor sharp claws extending from glove (5 long deadly claws)
+    for (let i = 0; i < 5; i++) {
+        const claw = new THREE.Mesh(
+            new THREE.ConeGeometry(0.02, 0.6, 8),  // Thinner and longer = sharper!
+            clawMaterial
+        );
+        const angle = (i - 2) * 0.35;
+        claw.position.set(
+            0.8 + Math.sin(angle) * 0.1,
+            -0.85,
+            0.5 + Math.cos(angle) * 0.1
+        );
+        claw.rotation.x = -0.6;
+        claw.rotation.z = -angle * 0.5;
+        rightArmGroup.add(claw);
+    }
+    rightArmGroup.position.set(0.8, 3.2, 0);
+    santaGroup.add(rightArmGroup);
+    
     // Point light for eyes (creepy glow)
     const eyeLight = new THREE.PointLight(0xff0000, 0.5, 5);
-    eyeLight.position.set(0, 3, 0.5);
+    eyeLight.position.set(0, 4, 0.5);
     santaGroup.add(eyeLight);
     
     santaGroup.position.set(50, 0, 50);
@@ -3147,14 +4026,22 @@ function onNightStart() {
         Math.sin(angle) * distance
     );
     
-    // Darken the scene
+    // Darken the scene for night
     scene.fog.color.setHex(0x0a0a12);
     scene.background.setHex(0x0a0a12);
+    
+    // Show stars and moon at night
+    if (gameState.stars) gameState.stars.visible = true;
+    if (gameState.moon) gameState.moon.visible = true;
+    
+    // Dim the lights for night
+    if (gameState.ambientLight) gameState.ambientLight.intensity = 0.15;
+    if (gameState.directionalLight) gameState.directionalLight.intensity = 0.2;
     
     // Day 5 special raid!
     if (gameState.currentNight === 5 && gameState.windWhisperShown) {
         setTimeout(() => {
-            triggerSnowGuardRaid();
+            triggerCultistRaid();
         }, 2000);
     }
 }
@@ -3167,9 +4054,17 @@ function onDayStart() {
     gameState.santaActive = false;
     santa.visible = false;
     
-    // Lighten the scene
-    scene.fog.color.setHex(0x1a1a2e);
-    scene.background.setHex(0x1a1a2e);
+    // Lighten the scene - bright icy blue daytime sky
+    scene.fog.color.setHex(0x87CEEB);
+    scene.background.setHex(0x87CEEB);
+    
+    // Show bright daytime - hide stars and moon
+    if (gameState.stars) gameState.stars.visible = false;
+    if (gameState.moon) gameState.moon.visible = false;
+    
+    // Brighten the lights for day
+    if (gameState.ambientLight) gameState.ambientLight.intensity = 0.6;
+    if (gameState.directionalLight) gameState.directionalLight.intensity = 0.8;
     
     // Santa gets smarter each night
     gameState.santaSpeed += 0.1 * gameState.santaSmartness;
@@ -3377,6 +4272,58 @@ function playerDeath(cause) {
     } else if (cause === 'santa') {
         document.getElementById('santa-nights-survived').textContent = gameState.currentNight - 1;
         document.getElementById('santa-death-screen').style.display = 'flex';
+    }
+}
+
+function showCampfireDestroyedGameOver() {
+    gameState.isPlaying = false;
+    gameState.raidActive = false;
+    document.exitPointerLock();
+    
+    // Create the campfire destroyed screen if it doesn't exist
+    let fireDeathScreen = document.getElementById('fire-death-screen');
+    if (!fireDeathScreen) {
+        fireDeathScreen = document.createElement('div');
+        fireDeathScreen.id = 'fire-death-screen';
+        fireDeathScreen.style.cssText = `
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        `;
+        fireDeathScreen.innerHTML = `
+            <div style="text-align: center; color: white; font-family: 'Courier New', monospace;">
+                <h1 style="font-size: 4em; color: #ff4400; text-shadow: 0 0 30px #ff0000;">🔥 FIRE EXTINGUISHED 🔥</h1>
+                <p style="font-size: 1.5em; color: #aaa; margin: 20px 0;">The cultists destroyed your campfire...</p>
+                <p style="font-size: 1.2em; color: #888;">Without warmth, you froze in the arctic night.</p>
+                <p style="font-size: 1.5em; margin: 30px 0;">Survived <span style="color: #ff8800; font-size: 2em;">${gameState.currentNight - 1}</span> nights</p>
+                <button id="fire-restart-button" style="
+                    padding: 15px 40px;
+                    font-size: 1.3em;
+                    background: #ff4400;
+                    color: white;
+                    border: none;
+                    cursor: pointer;
+                    margin-top: 20px;
+                    font-family: 'Courier New', monospace;
+                ">TRY AGAIN</button>
+            </div>
+        `;
+        document.getElementById('game-container').appendChild(fireDeathScreen);
+        
+        document.getElementById('fire-restart-button').addEventListener('click', () => {
+            fireDeathScreen.style.display = 'none';
+            restartGame();
+        });
+    } else {
+        fireDeathScreen.querySelector('span').textContent = gameState.currentNight - 1;
+        fireDeathScreen.style.display = 'flex';
     }
 }
 
